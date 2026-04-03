@@ -8,7 +8,22 @@
           </div>
           <div>
             <h3 class="font-semibold text-gray-900 dark:text-white">{{ project.name }}</h3>
-            <p class="text-sm text-gray-500">{{ project.domain }}:{{ project.port }}</p>
+            <p class="text-sm text-gray-500">
+              <template v-if="project.domainType === 'external' && project.externalDomain">
+                {{ project.externalDomain }}
+              </template>
+              <template v-else>
+                {{ project.domain }}:{{ project.port }}
+              </template>
+              <UBadge
+                :color="project.domainType === 'external' ? 'success' : 'neutral'"
+                variant="soft"
+                size="xs"
+                class="ml-2"
+              >
+                {{ project.domainType === 'external' ? '外网' : '内网' }}
+              </UBadge>
+            </p>
           </div>
         </div>
         <ProjectStatus :status="project.status" />
@@ -58,17 +73,30 @@
           >
             部署
           </UButton>
-          <UButton
-            v-if="project.status === 'running'"
-            color="neutral"
-            variant="ghost"
-            size="sm"
-            icon="i-heroicons-arrow-top-right-on-square"
-            :to="`http://${project.domain}:${project.port}`"
-            target="_blank"
-          >
-            访问
-          </UButton>
+          <template v-if="project.status === 'running'">
+            <UButton
+              v-if="project.domainType === 'external' && project.externalDomain"
+              color="success"
+              variant="soft"
+              size="sm"
+              icon="i-heroicons-globe-alt"
+              :to="`http://${project.externalDomain}`"
+              target="_blank"
+            >
+              外网访问
+            </UButton>
+            <UButton
+              v-else
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              icon="i-heroicons-arrow-top-right-on-square"
+              :to="`http://${project.domain}:${project.port}`"
+              target="_blank"
+            >
+              内网访问
+            </UButton>
+          </template>
         </div>
         <div class="flex gap-1">
           <UButton

@@ -2,6 +2,8 @@ export type ProjectStatus = 'idle' | 'cloning' | 'installing' | 'building' | 'ru
 
 export type DeployStepType = 'git_clone' | 'git_pull' | 'shell' | 'kill_process' | 'start_service'
 
+export type DomainType = 'internal' | 'external'
+
 export interface DeployStep {
   id: string
   name: string
@@ -19,6 +21,8 @@ export interface Project {
   gitUrl: string
   branch: string
   domain: string
+  domainType: DomainType
+  externalDomain?: string
   port: number
   steps: DeployStep[]
   status: ProjectStatus

@@ -76,29 +76,61 @@
 
             <div>
               <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">服务配置</h2>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <UFormField label="绑定域名" name="domain" required>
+              <div class="space-y-6">
+                <UFormField label="域名类型" name="domainType" required>
+                  <URadioGroup
+                    v-model="form.domainType"
+                    :items="domainTypeOptions"
+                    orientation="horizontal"
+                  />
+                  <template #help>
+                    <span class="text-xs text-gray-500">
+                      {{ form.domainType === 'internal' ? '内网访问：通过端口访问服务' : '外网访问：通过固定域名直接访问' }}
+                    </span>
+                  </template>
+                </UFormField>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <UFormField label="内网域名" name="domain" required>
+                    <UInput
+                      v-model="form.domain"
+                      placeholder="localhost"
+                      icon="i-heroicons-globe-alt"
+                      class="w-full"
+                    />
+                    <template #help>
+                      <span class="text-xs text-gray-500">内网访问使用的域名（如 localhost 或内网 IP）</span>
+                    </template>
+                  </UFormField>
+
+                  <UFormField label="服务端口" name="port" required>
+                    <UInput
+                      v-model.number="form.port"
+                      type="number"
+                      placeholder="3001"
+                      icon="i-heroicons-hashtag"
+                      class="w-40"
+                    />
+                    <template #help>
+                      <span class="text-xs text-gray-500">服务启动时监听的端口</span>
+                    </template>
+                  </UFormField>
+                </div>
+
+                <UFormField
+                  v-if="form.domainType === 'external'"
+                  label="外网域名"
+                  name="externalDomain"
+                  required
+                >
                   <UInput
-                    v-model="form.domain"
-                    placeholder="localhost"
+                    v-model="form.externalDomain"
+                    placeholder="docs.example.com"
                     icon="i-heroicons-globe-alt"
                     class="w-full"
                   />
                   <template #help>
-                    <span class="text-xs text-gray-500">服务绑定的域名</span>
-                  </template>
-                </UFormField>
-
-                <UFormField label="服务端口" name="port" required>
-                  <UInput
-                    v-model.number="form.port"
-                    type="number"
-                    placeholder="3001"
-                    icon="i-heroicons-hashtag"
-                    class="w-40"
-                  />
-                  <template #help>
-                    <span class="text-xs text-gray-500">服务监听端口</span>
+                    <span class="text-xs text-gray-500">外网访问的固定域名（需提前配置反向代理）</span>
                   </template>
                 </UFormField>
               </div>
@@ -150,7 +182,7 @@
 </template>
 
 <script setup lang="ts">
-import type { DeployStep, StepTemplate } from '../../../shared/types/project'
+import type { DeployStep, StepTemplate, DomainType } from '../../../shared/types/project'
 
 const router = useRouter()
 const { createProject } = useProjects()
@@ -167,12 +199,19 @@ const templateOptions = computed(() =>
   templates.value.map((t: StepTemplate) => ({ label: t.name, value: t.key }))
 )
 
+const domainTypeOptions = [
+  { label: '内网访问', value: 'internal' as DomainType },
+  { label: '外网访问', value: 'external' as DomainType }
+]
+
 const form = reactive({
   name: '',
   description: '',
   gitUrl: '',
   branch: 'main',
   domain: 'localhost',
+  domainType: 'internal' as DomainType,
+  externalDomain: '',
   port: 3001,
   steps: [] as DeployStep[]
 })
@@ -213,6 +252,10 @@ async function handleSubmit() {
     alert('请输入服务端口')
     return
   }
+  if (form.domainType === 'external' && !form.externalDomain) {
+    alert('请输入外网域名')
+    return
+  }
   if (form.steps.length === 0) {
     alert('请至少配置一个部署步骤')
     return
@@ -226,6 +269,8 @@ async function handleSubmit() {
       gitUrl: form.gitUrl,
       branch: form.branch,
       domain: form.domain,
+      domainType: form.domainType,
+      externalDomain: form.externalDomain || undefined,
       port: form.port,
       steps: form.steps
     })

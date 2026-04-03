@@ -37,12 +37,28 @@
                   <p class="text-sm font-medium">{{ project.branch }}</p>
                 </div>
                 <div>
-                  <label class="text-sm text-gray-500">域名</label>
-                  <p class="text-sm font-medium">{{ project.domain }}</p>
+                  <label class="text-sm text-gray-500">域名类型</label>
+                  <p class="text-sm font-medium">
+                    <UBadge
+                      :color="project.domainType === 'external' ? 'success' : 'neutral'"
+                      variant="soft"
+                      size="xs"
+                    >
+                      {{ project.domainType === 'external' ? '外网' : '内网' }}
+                    </UBadge>
+                  </p>
                 </div>
                 <div>
                   <label class="text-sm text-gray-500">端口</label>
                   <p class="text-sm font-medium">{{ project.port }}</p>
+                </div>
+                <div>
+                  <label class="text-sm text-gray-500">内网域名</label>
+                  <p class="text-sm font-medium">{{ project.domain }}</p>
+                </div>
+                <div v-if="project.domainType === 'external' && project.externalDomain">
+                  <label class="text-sm text-gray-500">外网域名</label>
+                  <p class="text-sm font-medium text-success-600 dark:text-success-400">{{ project.externalDomain }}</p>
                 </div>
                 <div v-if="project.pid">
                   <label class="text-sm text-gray-500">进程 ID</label>
@@ -110,17 +126,29 @@
                   部署项目
                 </UButton>
 
-                <UButton
-                  v-if="project.status === 'running'"
-                  color="neutral"
-                  variant="soft"
-                  block
-                  icon="i-heroicons-arrow-top-right-on-square"
-                  :to="`http://${project.domain}:${project.port}`"
-                  target="_blank"
-                >
-                  访问站点
-                </UButton>
+                <template v-if="project.status === 'running'">
+                  <UButton
+                    v-if="project.domainType === 'external' && project.externalDomain"
+                    color="success"
+                    variant="soft"
+                    block
+                    icon="i-heroicons-globe-alt"
+                    :to="`http://${project.externalDomain}`"
+                    target="_blank"
+                  >
+                    外网访问
+                  </UButton>
+                  <UButton
+                    color="neutral"
+                    variant="soft"
+                    block
+                    icon="i-heroicons-arrow-top-right-on-square"
+                    :to="`http://${project.domain}:${project.port}`"
+                    target="_blank"
+                  >
+                    内网访问
+                  </UButton>
+                </template>
               </div>
             </UCard>
           </div>

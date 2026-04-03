@@ -1,6 +1,6 @@
-import type { Project, DeployLog, DeployStep } from '../../shared/types/project'
+import type { Project, DeployLog, DeployStep, DomainType } from '../../shared/types/project'
 
-export type { Project, DeployLog, DeployStep }
+export type { Project, DeployLog, DeployStep, DomainType }
 
 export interface StorageAdapter<T> {
   read(): Promise<T[]>

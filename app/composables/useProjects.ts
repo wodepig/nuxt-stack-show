@@ -1,4 +1,4 @@
-import type { Project, DeployStep } from '../../shared/types/project'
+import type { Project, DeployStep, DomainType } from '../../shared/types/project'
 
 export function useProjects() {
   const projects = ref<Project[]>([])
@@ -32,6 +32,8 @@ export function useProjects() {
     gitUrl: string
     branch?: string
     domain: string
+    domainType?: DomainType
+    externalDomain?: string
     port: number
     steps: DeployStep[]
   }) {

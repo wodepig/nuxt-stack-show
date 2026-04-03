@@ -1,6 +1,6 @@
 import { createStorage } from '../../utils/storage'
 import { isPortInUse } from '../../utils/port'
-import type { Project, DeployStep } from '../../types'
+import type { Project, DeployStep, DomainType } from '../../types'
 
 const projectStorage = createStorage<Project>('projects.json')
 
@@ -19,6 +19,8 @@ export default defineEventHandler(async (event) => {
     gitUrl: string
     branch?: string
     domain: string
+    domainType?: DomainType
+    externalDomain?: string
     port: number
     template?: string
     steps?: DeployStep[]
@@ -55,6 +57,8 @@ export default defineEventHandler(async (event) => {
     gitUrl: body.gitUrl,
     branch: body.branch || 'main',
     domain: body.domain,
+    domainType: body.domainType || 'internal',
+    externalDomain: body.externalDomain,
     port: body.port,
     steps,
     status: 'idle',

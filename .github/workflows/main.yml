@@ -93,6 +93,7 @@ jobs:
             # 启动新容器
             sudo docker run -d \
               -p ${{ vars.EXT_PORT }}:3000 \
+              -p 3001-3100:3001-3100 \
               --name ${{ github.event.repository.name }} \
               -v /opt/${{ github.event.repository.name }}/server/data:/app/server/data \
               -v /opt/${{ github.event.repository.name }}/projects:/app/projects \
