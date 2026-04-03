@@ -1,0 +1,160 @@
+name: 程序部署
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-push:
+    if: contains(github.event.head_commit.message, '部署') || contains(github.event.head_commit.message, '自动更新')
+    runs-on: ubuntu-latest
+    outputs:
+      start_time: ${{ steps.start_time.outputs.time }}
+    env:
+      SCT_AK: ${{ vars.SCT_AK }}
+      ALIYUN_USERNAME: ${{ secrets.ALIYUN_USERNAME }}
+      ALIYUN_PASSWORD: ${{ secrets.ALIYUN_PASSWORD }}
+    steps:
+      - name: Record start time
+        id: start_time
+        run: echo "time=$(date +%s)" >> $GITHUB_OUTPUT
+
+      - name: Start Notify
+        run: curl "https://sctapi.ftqq.com/${{ vars.SCT_AK }}.send?title=🟡${{ github.event.repository.name }}&desp=已开始部署"
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install dependencies (with fixes)
+        run: pnpm install
+
+      - name: Build project
+        run: pnpm build
+
+      - name: Login Aliyun Docker
+        uses: docker/login-action@v3
+        with:
+          registry: registry.cn-beijing.aliyuncs.com
+          username: ${{ secrets.ALIYUN_USERNAME }}
+          password: ${{ secrets.ALIYUN_PASSWORD }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: registry.cn-beijing.aliyuncs.com/xxdl_work/${{ github.event.repository.name }}:latest
+
+  remote-deploy:
+    if: contains(github.event.head_commit.message, '部署') || contains(github.event.head_commit.message, '自动更新')
+    needs: build-push
+    runs-on: ubuntu-latest
+    environment: prod
+    env:
+      EXT_PORT: ${{ vars.EXT_PORT }}
+      SERVER_USERNAME: ${{ secrets.SERVER_USERNAME }}
+      SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
+      SERVER_HOST: ${{ vars.SERVER_HOST }}
+      ALIYUN_USERNAME: ${{ secrets.ALIYUN_USERNAME }}
+      ALIYUN_PASSWORD: ${{ secrets.ALIYUN_PASSWORD }}
+    steps:
+      - name: SSH into server and deploy
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ vars.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          script: |
+            # 创建必要的目录
+            sudo mkdir -p /opt/${{ github.event.repository.name }}/public
+            sudo mkdir -p /opt/${{ github.event.repository.name }}/server/data
+            sudo mkdir -p /opt/${{ github.event.repository.name }}/projects
+            
+            # 停止并删除旧容器
+            sudo docker stop ${{ github.event.repository.name }} || true
+            sudo docker rm ${{ github.event.repository.name }} || true
+            
+            # 登录阿里云镜像仓库
+            sudo docker login registry.cn-beijing.aliyuncs.com -u ${{ secrets.ALIYUN_USERNAME }} -p ${{ secrets.ALIYUN_PASSWORD }}
+            
+            # 拉取最新镜像
+            sudo docker pull registry.cn-beijing.aliyuncs.com/xxdl_work/${{ github.event.repository.name }}:latest
+            
+            # 启动新容器
+            sudo docker run -d \
+              -p ${{ vars.EXT_PORT }}:3000 \
+              --name ${{ github.event.repository.name }} \
+              -v /opt/${{ github.event.repository.name }}/server/data:/app/server/data \
+              -v /opt/${{ github.event.repository.name }}/projects:/app/projects \
+              registry.cn-beijing.aliyuncs.com/xxdl_work/${{ github.event.repository.name }}:latest
+            
+            # 清理 Docker 配置
+            rm -f ~/.docker/config.json
+            
+            # 清理旧镜像
+            sudo docker image prune -f
+
+  send-notification:
+    if: always() && (contains(github.event.head_commit.message, '部署') || contains(github.event.head_commit.message, '自动更新'))
+    needs: [build-push, remote-deploy]
+    env:
+      SCT_AK: ${{ vars.SCT_AK }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code for commit info
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Calculate deployment time
+        id: time_calc
+        run: |
+          start_time=${{ needs.build-push.outputs.start_time }}
+          end_time=$(date +%s)
+          duration=$((end_time - start_time))
+          mins=$((duration / 60))
+          secs=$((duration % 60))
+          echo "duration=${mins}分${secs}秒" >> $GITHUB_OUTPUT
+          echo "current_time=$(date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
+
+      - name: Determine status
+        id: status_check
+        run: |
+          if [ "${{ needs.build-push.result }}" == "success" ] && [ "${{ needs.remote-deploy.result }}" == "success" ]; then
+            echo "status=成功" >> $GITHUB_OUTPUT
+            echo "status_emoji=🟢" >> $GITHUB_OUTPUT
+          else
+            echo "status=失败" >> $GITHUB_OUTPUT
+            echo "status_emoji=🔴" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get commit info
+        id: commit_info
+        run: |
+          commit_msg=$(git log -1 --pretty=format:"%s")
+          commit_hash=$(git rev-parse --short HEAD)
+          echo "commit_msg=${commit_msg}" >> $GITHUB_OUTPUT
+          echo "commit_hash=${commit_hash}" >> $GITHUB_OUTPUT
+
+      - name: Send notification
+        run: |
+          title="${{ steps.status_check.outputs.status_emoji }}${{ github.event.repository.name }}部署${{ steps.status_check.outputs.status }}"
+          desp="部署状态：${{ steps.status_check.outputs.status }}
+          部署耗时：${{ steps.time_calc.outputs.duration }}
+          提交信息：${{ steps.commit_info.outputs.commit_msg }}
+          提交哈希：${{ steps.commit_info.outputs.commit_hash }}
+          完成时间：${{ steps.time_calc.outputs.current_time }}"
+          
+          curl -s "https://sctapi.ftqq.com/${{ vars.SCT_AK }}.send" \
+            -d "title=${title}" \
+            -d "desp=${desp}"
