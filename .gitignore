@@ -22,3 +22,9 @@ logs
 .env
 .env.*
 !.env.example
+
+# Project data
+projects/*
+!projects/.gitkeep
+server/data/*
+!server/data/.gitkeep

@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  doc-manager:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: doc-manager
+    ports:
+      - "3000:3000"
+      # 为文档项目预留端口范围
+      - "3001-3100:3001-3100"
+    volumes:
+      # 持久化数据
+      - ./server/data:/app/server/data
+      - ./projects:/app/projects
+    environment:
+      - NODE_ENV=production
+      - NUXT_HOST=0.0.0.0
+      - NUXT_PORT=3000
+    restart: unless-stopped
