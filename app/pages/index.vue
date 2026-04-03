@@ -8,6 +8,14 @@
         </div>
         <div class="flex gap-3">
           <UButton
+            to="/templates"
+            color="neutral"
+            variant="soft"
+            icon="i-heroicons-document-duplicate"
+          >
+            模板
+          </UButton>
+          <UButton
             color="neutral"
             variant="soft"
             icon="i-heroicons-cog-6-tooth"

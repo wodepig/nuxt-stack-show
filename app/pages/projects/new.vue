@@ -144,12 +144,23 @@
                   <h2 class="text-lg font-semibold text-gray-900 dark:text-white">部署步骤</h2>
                   <p class="text-sm text-gray-500 mt-1">配置项目的部署流程</p>
                 </div>
-                <USelect
-                  v-model="selectedTemplate"
-                  :items="templateOptions"
-                  placeholder="选择预设模板"
-                  class="w-48"
-                />
+                <div class="flex items-center gap-3">
+                  <UButton
+                    to="/templates"
+                    color="neutral"
+                    variant="soft"
+                    size="sm"
+                    icon="i-heroicons-cog-6-tooth"
+                  >
+                    管理模板
+                  </UButton>
+                  <USelect
+                    v-model="selectedTemplate"
+                    :items="templateOptions"
+                    placeholder="选择预设模板"
+                    class="w-48"
+                  />
+                </div>
               </div>
               <StepEditor v-model="form.steps" />
             </div>
@@ -186,7 +197,7 @@ import type { DeployStep, StepTemplate, DomainType } from '../../../shared/types
 
 const router = useRouter()
 const { createProject } = useProjects()
-const { templates, fetchTemplates, getTemplate } = useTemplates()
+const { templates, fetchTemplates, getTemplateByKey } = useTemplates()
 
 onMounted(() => {
   fetchTemplates()
@@ -216,15 +227,15 @@ const form = reactive({
   steps: [] as DeployStep[]
 })
 
-watch(selectedTemplate, (key) => {
+watch(selectedTemplate, async (key) => {
   if (!key) return
-  
+
   // 选择"自定义"时不清空步骤，保留当前步骤让用户继续编辑
   if (key === 'custom') {
     return
   }
-  
-  const template = getTemplate(key)
+
+  const template = await getTemplateByKey(key)
   if (template && template.steps.length > 0) {
     const newSteps: DeployStep[] = template.steps.map((s, i) => ({
       ...s,

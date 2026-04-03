@@ -75,7 +75,7 @@ const emit = defineEmits<{
   'update:modelValue': [steps: DeployStep[]]
 }>()
 
-const { templates, fetchTemplates, getTemplate } = useTemplates()
+const { templates, fetchTemplates, getTemplateByKey } = useTemplates()
 
 onMounted(() => {
   fetchTemplates()
@@ -125,8 +125,8 @@ function removeStep(id: string) {
   emit('update:modelValue', reordered)
 }
 
-function applyTemplate(key: string) {
-  const template = getTemplate(key)
+async function applyTemplate(key: string) {
+  const template = await getTemplateByKey(key)
   if (template && template.steps.length > 0) {
     const newSteps: DeployStep[] = template.steps.map((s, i) => ({
       ...s,
@@ -137,9 +137,9 @@ function applyTemplate(key: string) {
   }
 }
 
-watch(selectedTemplate, (newVal) => {
+watch(selectedTemplate, async (newVal) => {
   if (newVal) {
-    applyTemplate(newVal)
+    await applyTemplate(newVal)
   }
 })
 </script>
