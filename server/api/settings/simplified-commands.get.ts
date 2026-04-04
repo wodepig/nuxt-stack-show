@@ -23,7 +23,10 @@ export default defineEventHandler(async () => {
   try {
     const data = await readFile(SETTINGS_FILE, 'utf-8')
     const settings = JSON.parse(data)
-    return settings.simplifiedCommands || DEFAULT_SIMPLIFIED_COMMANDS
+    // 使用 Array.isArray 检查，允许返回空数组（表示不简化）
+    return Array.isArray(settings.simplifiedCommands) 
+      ? settings.simplifiedCommands 
+      : DEFAULT_SIMPLIFIED_COMMANDS
   } catch {
     return DEFAULT_SIMPLIFIED_COMMANDS
   }

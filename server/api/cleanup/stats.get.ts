@@ -1,26 +1,19 @@
 import { readdir, stat } from 'fs/promises'
 import { join } from 'path'
 import { createStorage } from '../../utils/storage'
+import { logStorage } from '../../utils/logStorage'
 import type { Project } from '../../types'
 
 const projectStorage = createStorage<Project>('projects.json')
 const PROJECTS_DIR = join(process.cwd(), 'projects')
-const DATA_DIR = join(process.cwd(), 'server', 'data')
-const LOGS_FILE = join(DATA_DIR, 'deploy-logs.json')
 
 export default defineEventHandler(async () => {
   try {
     // 获取项目目录大小
     const projectsSize = await getDirectorySize(PROJECTS_DIR)
     
-    // 获取日志文件大小
-    let logsSize = 0
-    try {
-      const logsStat = await stat(LOGS_FILE)
-      logsSize = logsStat.size
-    } catch {
-      // 文件不存在
-    }
+    // 获取日志文件统计（支持多文件）
+    const logsStats = await logStorage.getStats()
 
     // 统计孤儿目录（没有关联项目的目录）
     const projects = await projectStorage.read()
@@ -46,13 +39,14 @@ export default defineEventHandler(async () => {
     return {
       projectsSize,
       projectsSizeFormatted: formatSize(projectsSize),
-      logsSize,
-      logsSizeFormatted: formatSize(logsSize),
+      logsSize: logsStats.totalSize,
+      logsSizeFormatted: logsStats.totalSizeFormatted,
+      logsFileCount: logsStats.fileCount,
       orphanCount,
       orphanSize,
       orphanSizeFormatted: formatSize(orphanSize),
-      totalSize: projectsSize + logsSize,
-      totalSizeFormatted: formatSize(projectsSize + logsSize)
+      totalSize: projectsSize + logsStats.totalSize,
+      totalSizeFormatted: formatSize(projectsSize + logsStats.totalSize)
     }
   } catch (error) {
     throw createError({

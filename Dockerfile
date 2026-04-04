@@ -1,8 +1,14 @@
 # 构建阶段
 FROM node:20-alpine AS builder
 
+# 设置 npm 淘宝镜像源
+RUN npm config set registry https://registry.npmmirror.com
+
 # 安装 pnpm
 RUN npm install -g pnpm
+
+# 设置 pnpm 淘宝镜像源
+RUN pnpm config set registry https://registry.npmmirror.com
 
 WORKDIR /app
 
@@ -21,11 +27,17 @@ RUN pnpm build
 # 生产阶段
 FROM node:20-alpine
 
-# 安装必要的工具
-RUN apk add --no-cache git
+# 安装必要的工具（Git、Bash、curl 等）
+RUN apk add --no-cache git bash curl
+
+# 设置 npm 淘宝镜像源
+RUN npm config set registry https://registry.npmmirror.com
 
 # 安装 pnpm
 RUN npm install -g pnpm
+
+# 设置 pnpm 淘宝镜像源
+RUN pnpm config set registry https://registry.npmmirror.com
 
 WORKDIR /app
 

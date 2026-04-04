@@ -1,12 +1,12 @@
 import { createStorage } from '../../../utils/storage'
 import { executeDeploy } from '../../../utils/steps'
+import { logStorage } from '../../../utils/logStorage'
 import { readFile } from 'fs/promises'
 import { join } from 'path'
 import type { Project, DeployLog } from '../../../types'
 import { DEFAULT_SIMPLIFIED_COMMANDS } from '../../settings/simplified-commands.get'
 
 const projectStorage = createStorage<Project>('projects.json')
-const logStorage = createStorage<DeployLog>('deploy-logs.json')
 const DATA_DIR = join(process.cwd(), 'server', 'data')
 const SETTINGS_FILE = join(DATA_DIR, 'settings.json')
 
@@ -19,7 +19,10 @@ async function getSimplifiedCommands(): Promise<string[]> {
   try {
     const data = await readFile(SETTINGS_FILE, 'utf-8')
     const settings = JSON.parse(data)
-    return settings.simplifiedCommands || DEFAULT_SIMPLIFIED_COMMANDS
+    // 使用 Array.isArray 检查，允许返回空数组（表示不简化）
+    return Array.isArray(settings.simplifiedCommands) 
+      ? settings.simplifiedCommands 
+      : DEFAULT_SIMPLIFIED_COMMANDS
   } catch {
     return DEFAULT_SIMPLIFIED_COMMANDS
   }
@@ -28,6 +31,11 @@ async function getSimplifiedCommands(): Promise<string[]> {
 // 简化日志内容
 function simplifyLogContent(content: string, simplifiedCommands: string[]): string {
   if (!content) return content
+  
+  // 如果简化命令列表为空，不进行简化
+  if (simplifiedCommands.length === 0) {
+    return content
+  }
   
   const lines = content.split('\n')
   const simplifiedLines: string[] = []
@@ -119,6 +127,20 @@ export default defineEventHandler(async (event) => {
   console.log(`[Deploy] Simplified commands: ${simplifiedCommands.join(', ')}`)
 
   const logCallback = async (log: Partial<DeployLog>) => {
+    // 检查是否是简化命令 - 如果是，只输出到控制台，不写入文件
+    const isSimplifiedCommand = log.message && simplifiedCommands.some(cmd => 
+      log.message?.toLowerCase().includes(cmd.toLowerCase())
+    )
+    
+    if (isSimplifiedCommand) {
+      // 简化命令只输出到控制台，不保存到文件
+      console.log(`[Deploy Log] ${log.status}: ${log.message}`)
+      if (log.details) {
+        console.log(`[Deploy Log Details] ${log.details.substring(0, 200)}...`)
+      }
+      return
+    }
+
     // 简化日志内容
     const simplifiedDetails = log.details 
       ? simplifyLogContent(log.details, simplifiedCommands)

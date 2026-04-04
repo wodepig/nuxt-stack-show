@@ -1,3 +1,4 @@
+import { platform } from 'os'
 import { killProcess, executeCommand, startService, findProcessByPort } from './process'
 import { executeGitStep, getProjectPath } from './git'
 import type { Project, DeployStep, DeployLog } from '../types'
@@ -27,7 +28,7 @@ export async function executeStep(
       return executeGitCloneStep(project, context)
 
     case 'shell':
-      return executeShellStep(step, projectPath)
+      return executeShellStep(step, projectPath, context)
 
     case 'kill_process':
       return executeKillProcessStep(project, context)
@@ -49,7 +50,18 @@ async function executeGitCloneStep(
   context: DeployContext
 ): Promise<StepResult> {
   try {
-    const result = await executeGitStep(project.id, project.gitUrl, project.branch)
+    let realTimeOutput = ''
+    const result = await executeGitStep(project.id, project.gitUrl, project.branch, (data) => {
+      realTimeOutput += data
+      // 实时输出日志
+      context.logCallback?.({
+        projectId: project.id,
+        type: 'clone',
+        message: result.isNew ? 'Cloning repository...' : 'Pulling latest changes...',
+        details: realTimeOutput,
+        status: 'running'
+      })
+    })
     return {
       success: result.success,
       output: result.output,
@@ -64,9 +76,33 @@ async function executeGitCloneStep(
   }
 }
 
+// 跨平台命令转换
+function normalizeCommand(command: string): string {
+  const isWindows = platform() === 'win32'
+  
+  // 处理 Windows set 命令中的引号问题
+  // set VAR="value" -> set VAR=value
+  command = command.replace(/set\s+(\w+)=\s*"([^"]*)"/gi, 'set $1=$2')
+  
+  if (!isWindows) {
+    // Linux/Docker 环境：将 Windows 特定命令转换为 Unix 命令
+    command = command
+      .replace(/\\/g, '/') // 路径分隔符转换
+      .replace(/\.cmd/g, '') // 移除 .cmd 后缀
+      .replace(/\.bat/g, '') // 移除 .bat 后缀
+    
+    // Windows set 命令转换为 Linux export
+    // set VAR=value -> export VAR=value
+    command = command.replace(/set\s+(\w+)=(.*)/gi, 'export $1="$2"')
+  }
+  
+  return command
+}
+
 async function executeShellStep(
   step: DeployStep,
-  projectPath: string
+  projectPath: string,
+  context: DeployContext
 ): Promise<StepResult> {
   if (!step.command) {
     return {
@@ -78,7 +114,24 @@ async function executeShellStep(
 
   try {
     const workingDir = step.workingDir || projectPath
-    const { promise } = executeCommand(step.command, workingDir)
+    let realTimeOutput = ''
+    
+    // 转换命令为跨平台格式
+    const normalizedCommand = normalizeCommand(step.command)
+
+    const { promise } = executeCommand(normalizedCommand, workingDir, undefined, (data) => {
+      realTimeOutput += data
+      // 实时输出日志
+      context.logCallback?.({
+        projectId: context.project.id,
+        stepId: step.id,
+        type: 'install',
+        message: `Executing: ${normalizedCommand}`,
+        details: realTimeOutput,
+        status: 'running'
+      })
+    })
+
     const { code, output } = await promise
 
     return {

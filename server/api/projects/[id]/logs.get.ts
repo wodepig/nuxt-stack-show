@@ -1,7 +1,4 @@
-import { createStorage } from '../../../utils/storage'
-import type { DeployLog } from '../../../types'
-
-const logStorage = createStorage<DeployLog>('deploy-logs.json')
+import { logStorage } from '../../../utils/logStorage'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')

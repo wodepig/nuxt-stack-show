@@ -123,10 +123,10 @@ async function refreshLogs() {
 }
 
 function startAutoRefresh() {
-  // 每 3 秒自动刷新一次
+  // 每 1 秒自动刷新一次
   refreshInterval = setInterval(() => {
     refreshLogs()
-  }, 3000)
+  }, 1000)
 }
 
 function stopAutoRefresh() {

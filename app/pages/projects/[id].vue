@@ -69,7 +69,18 @@
 
             <UCard>
               <template #header>
-                <h2 class="text-lg font-semibold">部署步骤</h2>
+                <div class="flex items-center justify-between">
+                  <h2 class="text-lg font-semibold">部署步骤</h2>
+                  <UButton
+                    color="neutral"
+                    variant="ghost"
+                    size="sm"
+                    icon="i-heroicons-pencil-square"
+                    @click="showStepEditor = true"
+                  >
+                    编辑步骤
+                  </UButton>
+                </div>
               </template>
 
               <div class="space-y-2">
@@ -162,6 +173,52 @@
           title="项目不存在"
         />
       </div>
+
+      <!-- 步骤编辑弹窗 -->
+      <UModal v-model:open="showStepEditor" title="编辑部署步骤" description="重新应用模板或自定义部署步骤">
+        <template #body>
+          <div class="space-y-6">
+            <div class="flex items-center gap-3">
+              <USelect
+                v-model="selectedTemplateKey"
+                :items="templateOptions"
+                placeholder="选择模板重新应用"
+                class="flex-1"
+              />
+              <UButton
+                color="primary"
+                size="sm"
+                icon="i-heroicons-arrow-path"
+                :loading="applyingTemplate"
+                :disabled="!selectedTemplateKey"
+                @click="applyTemplate"
+              >
+                应用
+              </UButton>
+            </div>
+
+            <UDivider />
+
+            <StepEditor v-model="editableSteps" />
+          </div>
+        </template>
+
+        <template #footer>
+          <div class="flex justify-end gap-3">
+            <UButton color="neutral" variant="soft" @click="showStepEditor = false">
+              取消
+            </UButton>
+            <UButton
+              color="primary"
+              icon="i-heroicons-check"
+              :loading="savingSteps"
+              @click="saveSteps"
+            >
+              保存
+            </UButton>
+          </div>
+        </template>
+      </UModal>
     </UContainer>
   </div>
 </template>
@@ -170,16 +227,26 @@
 import type { Project, DeployStep } from '../../../shared/types/project'
 
 const route = useRoute()
-const { getProject } = useProjects()
+const { getProject, updateProject } = useProjects()
 const { deployProject, stopProject } = useDeploy()
+const { templates, fetchTemplates, getTemplateByKey } = useTemplates()
 
 const project = ref<Project | null>(null)
 const loading = ref(true)
 const deploying = ref(false)
 const stopping = ref(false)
+const showStepEditor = ref(false)
+const selectedTemplateKey = ref('')
+const applyingTemplate = ref(false)
+const savingSteps = ref(false)
+const editableSteps = ref<DeployStep[]>([])
 
 const sortedSteps = computed(() =>
   [...(project.value?.steps || [])].sort((a, b) => a.order - b.order)
+)
+
+const templateOptions = computed(() =>
+  templates.value.map((t) => ({ label: t.name, value: t.key }))
 )
 
 function stepTypeLabel(type: DeployStep['type']) {
@@ -231,5 +298,56 @@ async function handleStop() {
 
 onMounted(() => {
   loadProject()
+  fetchTemplates()
 })
+
+// 监听弹窗打开，初始化可编辑步骤
+watch(showStepEditor, (val) => {
+  if (val && project.value) {
+    editableSteps.value = JSON.parse(JSON.stringify(project.value.steps))
+  }
+})
+
+async function applyTemplate() {
+  if (!selectedTemplateKey.value) return
+
+  applyingTemplate.value = true
+  try {
+    const template = await getTemplateByKey(selectedTemplateKey.value)
+    if (template && template.steps.length > 0) {
+      editableSteps.value = template.steps.map((s, i) => ({
+        ...s,
+        id: Math.random().toString(36).substring(2, 10),
+        order: i + 1
+      }))
+    }
+  } catch (e) {
+    alert('应用模板失败：' + (e instanceof Error ? e.message : '未知错误'))
+  } finally {
+    applyingTemplate.value = false
+  }
+}
+
+async function saveSteps() {
+  if (!project.value) return
+
+  if (editableSteps.value.length === 0) {
+    alert('请至少配置一个部署步骤')
+    return
+  }
+
+  savingSteps.value = true
+  try {
+    await updateProject(project.value.id, {
+      steps: editableSteps.value
+    })
+    await loadProject()
+    showStepEditor.value = false
+    alert('部署步骤已更新')
+  } catch (e) {
+    alert('保存失败：' + (e instanceof Error ? e.message : '未知错误'))
+  } finally {
+    savingSteps.value = false
+  }
+}
 </script>

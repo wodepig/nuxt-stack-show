@@ -66,26 +66,38 @@ export async function findProcessByPort(port: number): Promise<number | null> {
 export function executeCommand(
   command: string,
   cwd?: string,
-  env?: Record<string, string>
+  env?: Record<string, string>,
+  onData?: (data: string) => void
 ): { process: ReturnType<typeof spawn>; promise: Promise<{ code: number; output: string }> } {
   const isWindows = platform() === 'win32'
+  
+  // 检测是否在 Docker 中（Linux 但无 GUI）
+  const isDocker = !isWindows && process.env.CONTAINER === 'true'
+  
   const shell = isWindows ? 'cmd' : 'sh'
   const shellFlag = isWindows ? '/c' : '-c'
+
+  console.log(`[Execute] ${isWindows ? 'Windows' : (isDocker ? 'Docker' : 'Linux')}: ${command}`)
 
   const child = spawn(shell, [shellFlag, command], {
     cwd,
     env: { ...process.env, ...env },
-    detached: !isWindows
+    detached: !isWindows,
+    windowsHide: true // Windows 下隐藏命令行窗口
   })
 
   let output = ''
 
   child.stdout?.on('data', (data) => {
-    output += data.toString()
+    const str = data.toString()
+    output += str
+    onData?.(str)
   })
 
   child.stderr?.on('data', (data) => {
-    output += data.toString()
+    const str = data.toString()
+    output += str
+    onData?.(str)
   })
 
   const promise = new Promise<{ code: number; output: string }>((resolve) => {
