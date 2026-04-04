@@ -1,6 +1,7 @@
 import { createStorage } from '../../../utils/storage'
 import { executeDeploy } from '../../../utils/steps'
 import { logStorage } from '../../../utils/logStorage'
+import { addDeployLog } from '../../../utils/deployLogCache'
 import { readFile } from 'fs/promises'
 import { join } from 'path'
 import type { Project, DeployLog } from '../../../types'
@@ -126,81 +127,77 @@ export default defineEventHandler(async (event) => {
   const simplifiedCommands = await getSimplifiedCommands()
   console.log(`[Deploy] Simplified commands: ${simplifiedCommands.join(', ')}`)
 
-  const logCallback = async (log: Partial<DeployLog>) => {
-    // 检查是否是简化命令 - 如果是，只输出到控制台，不写入文件
-    const isSimplifiedCommand = log.message && simplifiedCommands.some(cmd => 
-      log.message?.toLowerCase().includes(cmd.toLowerCase())
-    )
-    
-    if (isSimplifiedCommand) {
-      // 简化命令只输出到控制台，不保存到文件
-      console.log(`[Deploy Log] ${log.status}: ${log.message}`)
-      if (log.details) {
-        console.log(`[Deploy Log Details] ${log.details.substring(0, 200)}...`)
+  // 后台执行部署，不阻塞响应
+  ;(async () => {
+    const logCallback = async (log: Partial<DeployLog>) => {
+      const isSimplifiedCommand = log.message && simplifiedCommands.some(cmd => 
+        log.message?.toLowerCase().includes(cmd.toLowerCase())
+      )
+      
+      const logId = generateId()
+      
+      const fullLog: DeployLog = {
+        id: logId,
+        projectId: id,
+        type: log.type || 'install',
+        message: log.message || '',
+        details: log.details,
+        status: log.status || 'running',
+        createdAt: new Date().toISOString()
       }
-      return
+      
+      addDeployLog(id, fullLog)
+      
+      if (isSimplifiedCommand) {
+        console.log(`[Deploy Log] ${fullLog.status}: ${fullLog.message}`)
+        if (log.details) {
+          console.log(`[Deploy Log Details] ${log.details}`)
+        }
+      } else {
+        console.log(`[Deploy Log] ${fullLog.status}: ${fullLog.message}`)
+      }
+      
+      if (!isSimplifiedCommand) {
+        try {
+          await logStorage.add(fullLog)
+          console.log(`[Deploy Log] Saved log with id: ${logId}`)
+        } catch (e) {
+          console.error('[Deploy Log] Failed to save log:', e)
+        }
+      }
     }
 
-    // 简化日志内容
-    const simplifiedDetails = log.details 
-      ? simplifyLogContent(log.details, simplifiedCommands)
-      : undefined
-
-    const fullLog: DeployLog = {
-      id: generateId(),
-      projectId: id,
-      type: log.type || 'install',
-      message: log.message || '',
-      details: simplifiedDetails,
-      status: log.status || 'running',
-      createdAt: new Date().toISOString()
-    }
-    console.log(`[Deploy Log] ${fullLog.status}: ${fullLog.message}`)
     try {
-      await logStorage.add(fullLog)
-      console.log(`[Deploy Log] Saved log with id: ${fullLog.id}`)
-    } catch (e) {
-      console.error('[Deploy Log] Failed to save log:', e)
-    }
-  }
+      const result = await executeDeploy(project, logCallback)
 
-  try {
-    const result = await executeDeploy(project, logCallback)
+      if (result.success) {
+        await projectStorage.update(id, {
+          status: 'running',
+          pid: result.pid,
+          lastUpdatedAt: new Date().toISOString()
+        })
 
-    if (result.success) {
-      await projectStorage.update(id, {
-        status: 'running',
-        pid: result.pid,
-        lastUpdatedAt: new Date().toISOString()
-      })
-
-      console.log(`[Deploy] Deployment successful, PID: ${result.pid}`)
-      return {
-        success: true,
-        message: 'Deployment completed successfully',
-        url: `http://${project.domain}:${project.port}`,
-        pid: result.pid
+        console.log(`[Deploy] Deployment successful, PID: ${result.pid}`)
+      } else {
+        await projectStorage.update(id, {
+          status: 'error',
+          lastUpdatedAt: new Date().toISOString()
+        })
+        console.error(`[Deploy] Deployment failed: ${result.error}`)
       }
-    } else {
+    } catch (error) {
       await projectStorage.update(id, {
         status: 'error',
         lastUpdatedAt: new Date().toISOString()
       })
-
-      throw createError({
-        statusCode: 500,
-        statusMessage: result.error || 'Deployment failed'
-      })
+      console.error('[Deploy] Deployment error:', error)
     }
-  } catch (error) {
-    await projectStorage.update(id, {
-      status: 'error',
-      lastUpdatedAt: new Date().toISOString()
-    })
+  })()
 
-    throw createError({
-      statusCode: 500,
-      statusMessage: error instanceof Error ? error.message : 'Deployment failed'
-    })
+  // 立即返回响应
+  return {
+    success: true,
+    message: 'Deployment started',
+    projectId: id
   }
 })

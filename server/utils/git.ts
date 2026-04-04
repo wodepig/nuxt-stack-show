@@ -35,9 +35,10 @@ export async function cloneRepository(
   await ensureProjectsDir()
   const projectPath = join(PROJECTS_DIR, projectId)
 
-  // 使用 cross-platform 的 git 命令
+  // Windows cmd 中引号处理复杂，直接不使用引号
+  // branch、gitUrl 和 projectPath 都不应该包含空格或特殊字符
   const { promise } = executeCommand(
-    `git clone -b "${branch}" "${gitUrl}" "${projectPath}"`,
+    `git clone -b ${branch} ${gitUrl} ${projectPath}`,
     PROJECTS_DIR,
     undefined,
     onData

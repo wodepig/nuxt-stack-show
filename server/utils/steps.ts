@@ -53,11 +53,11 @@ async function executeGitCloneStep(
     let realTimeOutput = ''
     const result = await executeGitStep(project.id, project.gitUrl, project.branch, (data) => {
       realTimeOutput += data
-      // 实时输出日志
+      // 实时输出日志（不依赖 result，使用固定消息）
       context.logCallback?.({
         projectId: project.id,
         type: 'clone',
-        message: result.isNew ? 'Cloning repository...' : 'Pulling latest changes...',
+        message: '下载/更新代码...',
         details: realTimeOutput,
         status: 'running'
       })

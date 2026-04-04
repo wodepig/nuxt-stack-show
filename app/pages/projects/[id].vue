@@ -106,7 +106,7 @@
               </div>
             </UCard>
 
-            <DeployLog :project-id="project.id" />
+            <DeployLog ref="deployLogRef" :project-id="project.id" :project-status="project.status" />
           </div>
 
           <div class="space-y-6">
@@ -240,6 +240,7 @@ const selectedTemplateKey = ref('')
 const applyingTemplate = ref(false)
 const savingSteps = ref(false)
 const editableSteps = ref<DeployStep[]>([])
+const deployLogRef = ref<{ resetAndRefresh: () => void } | null>(null)
 
 const sortedSteps = computed(() =>
   [...(project.value?.steps || [])].sort((a, b) => a.order - b.order)
@@ -270,12 +271,40 @@ async function loadProject() {
   }
 }
 
+let statusCheckInterval: ReturnType<typeof setInterval> | null = null
+
+// 开始检查项目状态
+function startStatusCheck() {
+  if (statusCheckInterval) return
+  
+  statusCheckInterval = setInterval(async () => {
+    if (project.value && ['cloning', 'installing', 'building'].includes(project.value.status)) {
+      await loadProject()
+    } else {
+      // 状态已变为最终状态，停止检查
+      stopStatusCheck()
+    }
+  }, 2000)
+}
+
+// 停止检查项目状态
+function stopStatusCheck() {
+  if (statusCheckInterval) {
+    clearInterval(statusCheckInterval)
+    statusCheckInterval = null
+  }
+}
+
 async function handleDeploy() {
   if (!project.value) return
   deploying.value = true
+  // 重置日志并开始刷新
+  deployLogRef.value?.resetAndRefresh()
   try {
     await deployProject(project.value.id)
     await loadProject()
+    // 开始检查项目状态
+    startStatusCheck()
   } catch (e) {
     console.error('Deploy failed:', e)
   } finally {
@@ -296,9 +325,17 @@ async function handleStop() {
   }
 }
 
-onMounted(() => {
-  loadProject()
+onMounted(async () => {
+  await loadProject()
   fetchTemplates()
+  // 如果项目正在部署中，启动状态检查
+  if (project.value && ['cloning', 'installing', 'building'].includes(project.value.status)) {
+    startStatusCheck()
+  }
+})
+
+onUnmounted(() => {
+  stopStatusCheck()
 })
 
 // 监听弹窗打开，初始化可编辑步骤
