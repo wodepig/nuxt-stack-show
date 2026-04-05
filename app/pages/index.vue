@@ -8,6 +8,15 @@
         </div>
         <div class="flex gap-3">
           <UButton
+            color="neutral"
+            variant="soft"
+            icon="i-heroicons-arrow-path"
+            :loading="loading"
+            @click="handleRefresh"
+          >
+            刷新
+          </UButton>
+          <UButton
             to="/templates"
             color="neutral"
             variant="soft"
@@ -67,7 +76,10 @@
           :project="project"
           :deploying="deployingProjectId === project.id"
           :stopping="stoppingProjectId === project.id"
+          :quick-deploying="quickDeployingProjectId === project.id"
+          :can-quick-deploy="quickDeployChecks[project.id]?.canQuickDeploy"
           @deploy="handleDeploy"
+          @quick-deploy="handleQuickDeploy"
           @stop="handleStop"
           @delete="handleDelete"
         />
@@ -199,6 +211,8 @@ const { simplifiedCommands, fetchSimplifiedCommands, saveSimplifiedCommands } = 
 
 const deployingProjectId = ref<string | null>(null)
 const stoppingProjectId = ref<string | null>(null)
+const quickDeployingProjectId = ref<string | null>(null)
+const quickDeployChecks = ref<Record<string, { canQuickDeploy: boolean }>>({})
 const showCleanup = ref(false)
 const showSettings = ref(false)
 const cleaningProjects = ref(false)
@@ -208,9 +222,31 @@ const savingSettings = ref(false)
 // 可编辑的命令列表
 const editableCommands = ref<string[]>([])
 
-onMounted(() => {
-  fetchProjects()
+onMounted(async () => {
+  await fetchProjects()
+  // 检查所有项目的快速部署条件
+  checkAllQuickDeploy()
 })
+
+// 检查所有项目的快速部署条件
+async function checkAllQuickDeploy() {
+  for (const project of projects.value) {
+    if (project.status !== 'running') {
+      try {
+        const result = await $fetch(`/api/projects/${project.id}/quick-deploy-check`)
+        quickDeployChecks.value[project.id] = result as { canQuickDeploy: boolean }
+      } catch {
+        quickDeployChecks.value[project.id] = { canQuickDeploy: false }
+      }
+    }
+  }
+}
+
+// 刷新项目列表
+async function handleRefresh() {
+  await fetchProjects()
+  await checkAllQuickDeploy()
+}
 
 // 监听弹窗打开，获取数据
 watch(showCleanup, (val) => {
@@ -236,6 +272,20 @@ async function handleDeploy(project: Project) {
     console.error('Deploy failed:', e)
   } finally {
     deployingProjectId.value = null
+  }
+}
+
+async function handleQuickDeploy(project: Project) {
+  quickDeployingProjectId.value = project.id
+  try {
+    const result = await $fetch(`/api/projects/${project.id}/quick-deploy`, { method: 'POST' })
+    await fetchProjects()
+    console.log('Quick deployed:', result)
+  } catch (e) {
+    console.error('Quick deploy failed:', e)
+    alert('快速部署失败：' + (e instanceof Error ? e.message : '未知错误'))
+  } finally {
+    quickDeployingProjectId.value = null
   }
 }
 

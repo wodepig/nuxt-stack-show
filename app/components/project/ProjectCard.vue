@@ -63,16 +63,28 @@
           >
             停止
           </UButton>
-          <UButton
-            v-else
-            color="primary"
-            size="sm"
-            icon="i-heroicons-rocket-launch"
-            :loading="deploying"
-            @click="$emit('deploy', project)"
-          >
-            部署
-          </UButton>
+          <template v-else>
+            <UButton
+              color="primary"
+              size="sm"
+              icon="i-heroicons-rocket-launch"
+              :loading="deploying"
+              @click="$emit('deploy', project)"
+            >
+              部署
+            </UButton>
+            <UButton
+              v-if="canQuickDeploy"
+              color="success"
+              variant="soft"
+              size="sm"
+              icon="i-heroicons-bolt"
+              :loading="quickDeploying"
+              @click="$emit('quickDeploy', project)"
+            >
+              快速启动
+            </UButton>
+          </template>
           <template v-if="project.status === 'running'">
             <UButton
               v-if="project.domainType === 'external' && project.externalDomain"
@@ -126,12 +138,15 @@ interface Props {
   project: Project
   deploying?: boolean
   stopping?: boolean
+  quickDeploying?: boolean
+  canQuickDeploy?: boolean
 }
 
 defineProps<Props>()
 
 defineEmits<{
   deploy: [project: Project]
+  quickDeploy: [project: Project]
   stop: [project: Project]
   delete: [project: Project]
 }>()
